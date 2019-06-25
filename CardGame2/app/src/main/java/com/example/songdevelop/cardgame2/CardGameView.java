@@ -23,9 +23,11 @@ import java.util.Queue;
 import java.util.Random;
 
 public class CardGameView extends View {
-    public static Card m_SelectCard_1= null,m_SelectCard_2= null;
-    public static Card m_Shuffle[][];
-
+    public static final int STATE_READY= 0;
+    public static final int STATE_GAME= 1;
+    public static final int STATE_END= 2;
+    public int m_count_fail=0;
+    public TextView m_counting;
     private Bitmap m_BackGroundImage;
     private Bitmap m_CardBackSide;
     private Bitmap m_Card_Red;
@@ -38,11 +40,14 @@ public class CardGameView extends View {
     private int m_Effect_id_1;
     */
     T_GameChecking thread;
-    public I_GameState gameState;
-    private int fullWidth = 0,fullHeight = 0;
+    private int m_State= STATE_READY;
+    public Card m_SelectCard_1= null,m_SelectCard_2= null;
 
-    public static int width=0,height=0;
-    public static int x=0,y=0;
+    Card m_Shuffle[][];
+
+    private int fullWidth=0,fullHeight=0,width=0,height=0;
+
+    private int x=0,y=0;
     public CardGameView(Context context) {
         super(context);
         /** API Error
@@ -59,12 +64,13 @@ public class CardGameView extends View {
         m_Background_Music.setLooping(true);
         m_Background_Music.start();
         m_Shuffle = new Card[3][2];
-        setCardInit();
         setCardSize();
         setCardResizing();
+        setCardInit();
+        setCardShuffle();
         thread = new T_GameChecking(this);
         thread.start();
-        gameState = new GameReady();
+
         //m_counting = new TextView();
         //m_counting.setText(m_count_fail);
     }
@@ -91,6 +97,23 @@ public class CardGameView extends View {
         m_Shuffle[1][1] = new Card(Card.IMG_GREEN);
         m_Shuffle[2][0] = new Card(Card.IMG_BLUE);
         m_Shuffle[2][1] = new Card(Card.IMG_BLUE);
+    }
+    public void setCardShuffle()
+    {
+        Random rand = new Random();
+        Card temp;
+        int randx[] = new int[2];
+        int randy[] = new int[2];
+        for(int i = 0 ; i <10;i++) {
+            randx[0] = rand.nextInt(3);
+            randy[0] = rand.nextInt(2);
+            randx[1] = rand.nextInt(3);
+            randy[1] = rand.nextInt(2);
+
+            temp = m_Shuffle[randx[0]][randy[0]];
+            m_Shuffle[randx[0]][randy[0]] = m_Shuffle[randx[1]][randy[1]];
+            m_Shuffle[randx[1]][randy[1]] = temp;
+        }
     }
     /*
     public void setCardShuffle()
@@ -120,12 +143,83 @@ public class CardGameView extends View {
             }
         }
     }*/
+    public void startGame()
+    {
+        setCardShuffle();
+        for(int i = 0 ; i<2;i++ ) {
+            for (int j = 0; j < 3; j++)
+            {
+               m_Shuffle[j][i].m_State = Card.CARD_CLOSE;
+            }
+        }
+        //m_count_fail =0;
+    }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        gameState = gameState.execute(event);
+
+       if(m_State == STATE_READY)
+        {
+            startGame();
+            m_State = STATE_GAME;
+        }
+        else if(m_State == STATE_GAME)
+        {
+            int px,py;
+            px = (int)event.getX();
+            py = (int)event.getY();
+            for(int i=0;i<2;i++)
+            {
+                for(int j = 0 ;j<3;j++)
+                {
+                    Rect box = new Rect(this.x+(j*(width+10)),this.y+(i*(height+10)),
+                            this.x+(j*(width+10)+(width)),this.y+(i*(height+10)+height));
+                    if(box.contains(px,py))
+                    {
+                        if(m_SelectCard_1 == null && m_Shuffle[j][i].m_State != Card.CARD_MATCHED)
+                        {
+                            m_SelectCard_1 = m_Shuffle[j][i];
+                            m_SelectCard_1.m_State = Card.CARD_PLAYEROPEN;
+
+                         /*  if(!m_Effect_1.isPlaying()) {
+                                m_Effect_1.start();
+                            }
+*/
+                        }
+                        else {
+                            if (m_SelectCard_1 != m_Shuffle[j][i] && m_Shuffle[j][i].m_State != Card.CARD_MATCHED) {
+                                m_SelectCard_2 = m_Shuffle[j][i];
+                                m_SelectCard_2.m_State = Card.CARD_PLAYEROPEN;
+                            }
+
+                        /*    if(!m_Effect_1.isPlaying()) {
+                                m_Effect_1.start();
+                            }*/
+                        }
+                    }
+                }
+            }
+        }
+        else if(m_State == STATE_END)
+        {
+            m_State = STATE_GAME;
+            startGame();
+        }
         invalidate();
         return super.onTouchEvent(event);
+    }
+    public boolean isFinish()
+    {
+        for(int i=0;i<2;i++)
+        {
+            for(int j=0;j<3;j++)
+            {
+                if(m_Shuffle[j][i].m_State != Card.CARD_MATCHED){
+                    return false;
+                }
+            }
+        }
+        return true;
     }
     public void checkMatch()
     {
@@ -148,6 +242,9 @@ public class CardGameView extends View {
             m_SelectCard_2.m_State = Card.CARD_CLOSE;
             m_SelectCard_1 = null;
             m_SelectCard_2 = null;
+        }
+        if(isFinish()) {
+            m_State = STATE_END;
         }
         postInvalidate();
     }
